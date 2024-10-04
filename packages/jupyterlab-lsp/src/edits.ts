@@ -22,7 +22,7 @@ function offsetFromLsp(position: lsProtocol.Position, lines: string[]) {
   return offsetAtPosition(PositionConverter.lsp_to_ce(position), lines);
 }
 
-function toDocumentChanges(changes: {
+export function toDocumentChanges(changes: {
   [uri: string]: lsProtocol.TextEdit[];
 }): lsProtocol.TextDocumentEdit[] {
   let documentChanges = [];

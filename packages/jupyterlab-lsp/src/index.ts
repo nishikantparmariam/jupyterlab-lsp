@@ -46,6 +46,7 @@ import { RENAME_PLUGIN } from './features/rename';
 import { SIGNATURE_PLUGIN } from './features/signature';
 import { SYMBOL_PLUGIN } from './features/symbol';
 import { SYNTAX_HIGHLIGHTING_PLUGIN } from './features/syntax_highlighting';
+import { WORKSPACE_APPLYEDIT } from './handlers/workspaceApplyEdit';
 import { CODE_OVERRIDES_MANAGER } from './overrides';
 import { SettingsUIManager, SettingsSchemaManager } from './settings';
 import {
@@ -222,6 +223,7 @@ const plugin: JupyterFrontEndPlugin<void> = {
   ],
   optional: [ILoggerRegistry, IStatusBar, IFormRendererRegistry],
   activate: (app, ...args) => {
+    console.log('LOCAL VERSION WORKING!!');
     new LSPExtension(
       app,
       ...(args as [
@@ -260,7 +262,8 @@ const plugins: JupyterFrontEndPlugin<any>[] = [
   plugin,
   ...DEFAULT_TRANSCLUSIONS,
   ...DEFAULT_FEATURES,
-  COMPLETION_FALLBACK_PLUGIN
+  COMPLETION_FALLBACK_PLUGIN,
+  WORKSPACE_APPLYEDIT
 ];
 
 /**
