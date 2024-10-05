@@ -9,7 +9,8 @@ import {
 } from '@jupyterlab/application';
 import {
   // ILSPFeatureManager,
-  ILSPDocumentConnectionManager
+  ILSPDocumentConnectionManager,
+  WidgetLSPAdapter
   // WidgetLSPAdapter
 } from '@jupyterlab/lsp';
 import { INotebookTracker } from '@jupyterlab/notebook';
@@ -26,6 +27,16 @@ import {
 
 const METHOD = 'workspace/applyEdit';
 
+
+interface URIToAdapterMap {
+  [key: string]: WidgetLSPAdapter;
+}
+
+interface URIToTextDocumentEditsMap {
+  [key: string]: lsProtocol.TextDocumentEdit[];
+}
+
+
 function getTextDocumentEdits(
   edit: lsProtocol.WorkspaceEdit
 ): lsProtocol.TextDocumentEdit[] {
@@ -40,18 +51,52 @@ function getTextDocumentEdits(
   return textDocumentEdits;
 }
 
-function applyTextDocumentEdit(
-  textDocumentEdit: lsProtocol.TextDocumentEdit,
+function getURIToTextDocumentEditsMap(
+  textDocumentEdits: lsProtocol.TextDocumentEdit[]
+): URIToTextDocumentEditsMap {
+  const uriToTextDocumentEditsMap = {} as URIToTextDocumentEditsMap;
+
+  textDocumentEdits.forEach((textDocumentEdit: lsProtocol.TextDocumentEdit) => {
+    const { uri } = textDocumentEdit.textDocument;
+    if (!uriToTextDocumentEditsMap[uri]) uriToTextDocumentEditsMap[uri] = [];
+    uriToTextDocumentEditsMap[uri].push(textDocumentEdit);
+  });
+
+  return uriToTextDocumentEditsMap;
+}
+
+function getURIToAdapterMap(
   connectionManager: ILSPDocumentConnectionManager
+): URIToAdapterMap {
+  const uriToAdapterMap = {} as URIToAdapterMap;
+  const adapters = [...connectionManager.adapters.values()];
+  adapters.forEach((adapter: WidgetLSPAdapter) => {
+    const uri = adapter.virtualDocument?.documentInfo.uri;
+    if (uri) uriToAdapterMap[uri] = adapter;
+  });
+  return uriToAdapterMap;
+}
+
+function handleApplyEditRequest(
+  connectionManager: ILSPDocumentConnectionManager,
+  edit: lsProtocol.WorkspaceEdit
 ) {
-  const uri = textDocumentEdit.textDocument.uri;
-  const adapter = [...connectionManager.adapters.values()].find(
-    value => value.virtualDocument?.documentInfo.uri === uri
+  // only support edits for v1
+  const uriToAdapterMap = getURIToAdapterMap(connectionManager);
+  const uriToTextDocumentEditsMap = getURIToTextDocumentEditsMap(
+    getTextDocumentEdits(edit)
   );
-  if (!adapter || !adapter.virtualDocument) return;
-  // @ts-ignore
-  const applicator = new EditApplicator(adapter.virtualDocument, adapter);
-  applicator.applyEdit({ documentChanges: [textDocumentEdit] });
+  for (let uri in uriToTextDocumentEditsMap) {
+    const adapter = uriToAdapterMap[uri];
+    const textDocumentEdits = uriToTextDocumentEditsMap[uri];
+    if (!adapter || !adapter.virtualDocument) continue;
+    const applicator = new EditApplicator(
+      // @ts-ignore
+      adapter.virtualDocument,
+      adapter
+    );
+    applicator.applyEdit({ documentChanges: textDocumentEdits });
+  }
 }
 
 export const WORKSPACE_APPLYEDIT: JupyterFrontEndPlugin<void> = {
@@ -67,7 +112,7 @@ export const WORKSPACE_APPLYEDIT: JupyterFrontEndPlugin<void> = {
       const adapter = connectionManager.adapters.get(notebook.context.path);
       if (!adapter) return;
       adapter.ready.then(() => {
-        const virtualDocument = adapter.virtualDocument;
+        const {virtualDocument} = adapter;
         if (!virtualDocument) return;
         const connection = connectionManager.connections.get(
           virtualDocument.uri
@@ -82,14 +127,8 @@ export const WORKSPACE_APPLYEDIT: JupyterFrontEndPlugin<void> = {
               return;
             ((connection as any).connection as MessageConnection).onRequest(
               METHOD,
-              ({ edit }: lsProtocol.ApplyWorkspaceEditParams) => {
-                // only support edits for v1
-                getTextDocumentEdits(edit).forEach(
-                  (textDocumentEdit: lsProtocol.TextDocumentEdit) => {
-                    applyTextDocumentEdit(textDocumentEdit, connectionManager);
-                  }
-                );
-              }
+              ({ edit }: lsProtocol.ApplyWorkspaceEditParams) =>
+                handleApplyEditRequest(connectionManager, edit)
             );
           }
         );

@@ -92,7 +92,7 @@ export class EditApplicator {
             }
           }
 
-          // TODO make use of oldToNewLine for edits which add of remove lines:
+          // TODO make use of oldToNewLine for edits which add or remove lines:
           //  this is crucial to preserve cell boundaries in notebook in such cases
           let oldToNewLine = new DefaultMap<number, number[]>(() => []);
           let newText = '';
@@ -178,7 +178,7 @@ export class EditApplicator {
     let document = this.virtualDocument;
     let newFragmentText = newText
       .split('\n')
-      .slice(fragmentStart.line - start.line, fragmentEnd.line - start.line)
+      .slice(fragmentStart.line - start.line, fragmentEnd.line - start.line + 1)
       .join('\n');
 
     if (newFragmentText.endsWith('\n')) {
